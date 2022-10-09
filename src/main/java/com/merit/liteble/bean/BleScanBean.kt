@@ -2,6 +2,7 @@ package com.merit.liteble.bean
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
+import java.util.*
 
 /**
  * @Description 蓝牙扫描配置实体类
@@ -10,6 +11,7 @@ import kotlinx.parcelize.Parcelize
  */
 @Parcelize
 data class BleScanBean(
+    var mServiceUUIDs: Array<UUID>? = null,
     var mDeviceNames: Array<String>? = null,
     var mDeviceMac: String? = null,
     var mScanTimeOut: Long? = 10000L,
@@ -22,6 +24,10 @@ data class BleScanBean(
 
         other as BleScanBean
 
+        if (mServiceUUIDs != null) {
+            if (other.mServiceUUIDs == null) return false
+            if (!mServiceUUIDs.contentEquals(other.mServiceUUIDs)) return false
+        } else if (other.mServiceUUIDs != null) return false
         if (mDeviceNames != null) {
             if (other.mDeviceNames == null) return false
             if (!mDeviceNames.contentEquals(other.mDeviceNames)) return false
@@ -35,7 +41,8 @@ data class BleScanBean(
     }
 
     override fun hashCode(): Int {
-        var result = mDeviceNames?.contentHashCode() ?: 0
+        var result = mServiceUUIDs?.contentHashCode() ?: 0
+        result = 31 * result + (mDeviceNames?.contentHashCode() ?: 0)
         result = 31 * result + (mDeviceMac?.hashCode() ?: 0)
         result = 31 * result + (mScanTimeOut?.hashCode() ?: 0)
         result = 31 * result + (mAutoConnect?.hashCode() ?: 0)

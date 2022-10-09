@@ -1,9 +1,13 @@
 package com.merit.liteble.scan
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.util.Log
+import com.merit.liteble.bean.BleConstants
 import com.merit.liteble.bean.BleDevice
 import com.merit.liteble.bean.BleScanBean
+import com.merit.liteble.callback.BleScanManagerImp
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentLinkedDeque
 
@@ -14,10 +18,12 @@ import java.util.concurrent.ConcurrentLinkedDeque
  */
 abstract class BleScanManager : BluetoothAdapter.LeScanCallback {
 
-    private var mScanBean:BleScanBean? = null
-    private var scanJob:Job? = null
+    private var mScanBean: BleScanBean? = null
+    private var scanJob: Job? = null
     private var scanDeviceList = ConcurrentLinkedDeque<BleDevice>()
+    private var mBleScanManagerImp: BleScanManagerImp? = null
 
+    @SuppressLint("MissingPermission")
     override fun onLeScan(device: BluetoothDevice?, rssi: Int, scanRecord: ByteArray?) {
         var bleDevice = BleDevice()
         bleDevice.mDevice = device
@@ -25,40 +31,64 @@ abstract class BleScanManager : BluetoothAdapter.LeScanCallback {
         bleDevice.mRssi = rssi
         bleDevice.mTimestampNanos = System.currentTimeMillis()
         scanDeviceList.offer(bleDevice)
+        Log.d("BleScanManager", "onLeScan: ${device?.name} ${device?.address}")
     }
 
     @DelicateCoroutinesApi
-    fun startScanJob(){
+    fun startScanJob() {
+        scanJob?.cancel()
         scanJob = GlobalScope.launch(Dispatchers.IO) {
-            while (true){
+            while (true) {
                 handleScanResult()
             }
         }
     }
 
-    fun prepare(scanBean: BleScanBean) {
+    /**
+     * 准备开始扫描
+     */
+    fun prepare(scanBean: BleScanBean, bleScanManagerImp: BleScanManagerImp) {
         mScanBean = scanBean
+        mBleScanManagerImp = bleScanManagerImp
         startScanJob()
     }
 
-    /**
-     * 停止扫描
-     */
-    fun notifyScanStop(){
-        scanJob?.cancel()
+    fun getBleScanImp(): BleScanManagerImp? {
+        return mBleScanManagerImp
     }
 
     /**
      * 处理扫描结果
      */
-    private fun handleScanResult(){
+    private fun handleScanResult() {
         var bleDevice = scanDeviceList.poll()
-        checkDevice(bleDevice)
+        bleDevice?.let {
+            onLeScan(bleDevice)
+            onScanning(bleDevice)
+        }
     }
 
-    private fun checkDevice(bleDevice: BleDevice){
+    /**
+     * 开始
+     */
+    fun notifyScanStart(isSuccess: Boolean) {
+        scanDeviceList.clear()
+        if (isSuccess && (mScanBean?.mScanTimeOut ?: BleConstants.SCAN_TIME_OUT) > 0) {
+            GlobalScope.launch(Dispatchers.IO) {
+                delay(mScanBean?.mScanTimeOut ?: BleConstants.SCAN_TIME_OUT)
+                BleScanner.instance.stopBleScan()
 
+            }
+        }
+        onScanStarted(isSuccess)
+    }
 
+    /**
+     * 停止扫描
+     */
+    fun notifyScanStop() {
+        scanJob?.cancel()
+        onScanFinished(scanDeviceList.toList())
     }
 
     abstract fun onScanStarted(success: Boolean)
