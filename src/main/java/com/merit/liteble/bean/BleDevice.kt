@@ -40,5 +40,20 @@ data class BleDevice(
         result = 31 * result + (mTimestampNanos?.hashCode() ?: 0)
         return result
     }
+
+    fun getKey(): String {
+        return mDevice?.let {
+            "${it.name}${it.address}"
+        }?:""
+    }
+
+    fun getMac(): String {
+        return mDevice?.address?:""
+    }
+
+    fun getName(): String {
+        return mDevice?.name?:""
+    }
+
 }
 

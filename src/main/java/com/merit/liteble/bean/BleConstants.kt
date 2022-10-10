@@ -10,4 +10,5 @@ object BleConstants {
     var CONN_TIME_OUT = 10000L
     var OPERATE_TIME_OUT = 10000L
     var RECONNECT_COUNT = 3
+    var MAX_MULTIPLE_DEVICE = 7
 }

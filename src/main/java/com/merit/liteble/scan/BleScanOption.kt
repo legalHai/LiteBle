@@ -1,19 +1,16 @@
 package com.merit.liteble.scan
 
 import com.merit.liteble.bean.BleConstants
+import com.merit.liteble.bean.BleScanBean
 
 /**
  * @Description 蓝牙扫描配置
  * @Author lk
  * @Date 2022/9/30 11:28
  */
-open class BleScanOption private constructor(){
+open class BleScanOption private constructor() {
 
-    private var mDeviceNames: Array<String>? = null
-    private var mDeviceMac: String? = null
-    private var mScanTimeOut: Long? = BleConstants.SCAN_TIME_OUT
-    private var mAutoConnect = false
-    private var mFuzzy = false
+    lateinit var bleScanBean: BleScanBean
 
     class Builder {
         private var mDeviceNames: Array<String>? = null
@@ -44,11 +41,12 @@ open class BleScanOption private constructor(){
 
         fun build(): BleScanOption {
             var option = BleScanOption()
-            option.mDeviceNames = this.mDeviceNames
-            option.mDeviceMac = this.mDeviceMac
-            option.mScanTimeOut = this.mScanTimeOut
-            option.mAutoConnect = this.mAutoConnect
-            option.mFuzzy = this.mFuzzy
+            option.bleScanBean = BleScanBean()
+            option.bleScanBean.mDeviceNames = this.mDeviceNames
+            option.bleScanBean.mDeviceMac = this.mDeviceMac
+            option.bleScanBean.mScanTimeOut = this.mScanTimeOut
+            option.bleScanBean.mAutoConnect = this.mAutoConnect
+            option.bleScanBean.mFuzzy = this.mFuzzy
             return option
         }
     }
