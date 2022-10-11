@@ -201,7 +201,6 @@ class BleBluetooth(bleDevice: BleDevice?) {
 
     @Synchronized
     fun connectTimeOutControl() {
-
         job = GlobalScope.launch(Dispatchers.IO) {
             delay(BleManager.instance.getConnectTimeout())
             stateConnectOverTime()
@@ -283,6 +282,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
 
         bleDevice?.let { device ->
             bluetoothGatt?.let {
+                job?.cancel()
                 bleGattCallback?.onConnectSuccess(device, it, BluetoothGatt.GATT_SUCCESS)
             }
         }

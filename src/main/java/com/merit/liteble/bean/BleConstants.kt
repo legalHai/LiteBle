@@ -11,4 +11,7 @@ object BleConstants {
     var OPERATE_TIME_OUT = 10000L
     var RECONNECT_COUNT = 3
     var MAX_MULTIPLE_DEVICE = 7
+    var WRITE_DATA_SPLIT_COUNT = 20
+    var MAX_MTU = 512
+    var MIN_MTU = 23
 }

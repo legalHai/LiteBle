@@ -31,7 +31,6 @@ abstract class BleScanManager : BluetoothAdapter.LeScanCallback {
         bleDevice.mRssi = rssi
         bleDevice.mTimestampNanos = System.currentTimeMillis()
         scanDeviceList.offer(bleDevice)
-        Log.d("BleScanManager", "onLeScan: ${device?.name} ${device?.address}")
     }
 
     @DelicateCoroutinesApi
@@ -91,6 +90,9 @@ abstract class BleScanManager : BluetoothAdapter.LeScanCallback {
         onScanFinished(scanDeviceList.toList())
     }
 
+    fun isNeedConnect(): Boolean {
+        return mScanBean?.mNeedConnect ?: false
+    }
     abstract fun onScanStarted(success: Boolean)
 
     abstract fun onLeScan(bleDevice: BleDevice)
