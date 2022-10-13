@@ -14,9 +14,9 @@ data class BleScanBean(
     var mServiceUUIDs: Array<UUID>? = null,
     var mDeviceNames: Array<String>? = null,
     var mDeviceMac: String? = null,
-    var mScanTimeOut: Long? = 10000L,
+    var mScanTimeOut: Long? = BleConstants.SCAN_TIME_OUT,
     var mAutoConnect: Boolean? = false,
-    var mNeedConnect: Boolean? = false,
+    var mNeedConnect: Int? = BleConstants.SCAN_NOT_CONNECT,
     var mFuzzy: Boolean? = false
 ) : Parcelable {
     override fun equals(other: Any?): Boolean {
@@ -48,9 +48,10 @@ data class BleScanBean(
         result = 31 * result + (mDeviceMac?.hashCode() ?: 0)
         result = 31 * result + (mScanTimeOut?.hashCode() ?: 0)
         result = 31 * result + (mAutoConnect?.hashCode() ?: 0)
-        result = 31 * result + (mNeedConnect?.hashCode() ?: 0)
+        result = 31 * result + (mNeedConnect ?: 0)
         result = 31 * result + (mFuzzy?.hashCode() ?: 0)
         return result
     }
+
 
 }

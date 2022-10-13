@@ -4,7 +4,7 @@ import com.merit.liteble.bluetooth.BleBluetooth
 import kotlin.math.ceil
 
 /**
- * @Description
+ * @Description 连接设备列表缓存
  * @Author lk
  * @Date 2022/10/10 13:41
  */

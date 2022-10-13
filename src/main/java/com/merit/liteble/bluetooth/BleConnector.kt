@@ -13,14 +13,14 @@ import kotlinx.coroutines.*
 import java.util.*
 
 /**
- * @Description
+ * @Description 连接类
  * @Author lk
  * @Date 2022/10/10 15:30
  */
 class BleConnector(bleBluetooth: BleBluetooth) {
 
     companion object {
-        val UUID_CLIENT_CHARACTERISTIC_CONFIG_DESCRIPTOR = "00002902-0000-1000-8000-00805f9b34fb"
+        const val UUID_CLIENT_CHARACTERISTIC_CONFIG_DESCRIPTOR = "00002902-0000-1000-8000-00805f9b34fb"
     }
 
     private var mBleBluetooth: BleBluetooth = bleBluetooth
@@ -109,6 +109,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         bleNotifyCallback: BleNotifyCallback?
     ): Boolean {
         if (bluetoothGatt == null && bluetoothGattCharacteristic == null) {
+            cancelNotifyTimeout()
             bleNotifyCallback?.onNotifyFailure(OtherException("gatt or characteristic equal null"))
             return false
         }
@@ -116,6 +117,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
             bluetoothGattCharacteristic?.let {
                 var isSuccess = gatt.setCharacteristicNotification(it, enable)
                 if (!isSuccess) {
+                    cancelNotifyTimeout()
                     bleNotifyCallback?.onNotifyFailure(OtherException("gatt setCharacteristicNotification fail"))
                 }
             }
@@ -137,11 +139,13 @@ class BleConnector(bleBluetooth: BleBluetooth) {
             bluetoothGatt?.let { gatt ->
                 var descSuccess = gatt.writeDescriptor(it)
                 if (!descSuccess) {
+                    cancelNotifyTimeout()
                     bleNotifyCallback?.onNotifyFailure(OtherException("gatt writeDescriptor fail"))
                 }
                 return descSuccess
             }
         } ?: let {
+            cancelNotifyTimeout()
             bleNotifyCallback?.onNotifyFailure(OtherException("gatt writeDescriptor fail"))
         }
         return false
@@ -165,6 +169,8 @@ class BleConnector(bleBluetooth: BleBluetooth) {
             } else {
                 bleIndicateCallback?.onIndicateFailure(OtherException("this characteristic not support indicate!"))
             }
+        } ?: let {
+            bleIndicateCallback?.onIndicateFailure(OtherException("this characteristic is null!"))
         }
     }
 
@@ -191,12 +197,14 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         enable: Boolean,
     ): Boolean {
         if (bluetoothGatt == null && bluetoothGattCharacteristic == null) {
+            cancelIndicateTimeout()
             bleIndicateCallback?.onIndicateFailure(OtherException("gatt or characteristic equal null"))
             return false
         }
         var notifySuccess =
             bluetoothGatt?.setCharacteristicNotification(bluetoothGattCharacteristic, enable)
         if (notifySuccess == false) {
+            cancelIndicateTimeout()
             bleIndicateCallback?.onIndicateFailure(OtherException("gatt setCharacteristicNotification fail"))
             return false
         }
@@ -212,11 +220,13 @@ class BleConnector(bleBluetooth: BleBluetooth) {
                 if (enable) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
             var descriptorSuccess = bluetoothGatt?.writeDescriptor(it)
             if (descriptorSuccess == false) {
+                cancelIndicateTimeout()
                 bleIndicateCallback?.onIndicateFailure(OtherException("gatt writeDescriptor fail"))
                 return false
             }
             return true
         } ?: let {
+            cancelIndicateTimeout()
             bleIndicateCallback?.onIndicateFailure(OtherException("descriptor equals null"))
         }
         return false
@@ -228,11 +238,13 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         uuidWrite: String
     ) {
         if (data == null || data.isEmpty()) {
+            cancelWriteTimeout()
             bleWriteCallback?.onWriteFailure(OtherException("data write is null or empty"))
             return
         }
         mBluetoothGattCharacteristic?.let {
             if (it.properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) == 0) {
+                cancelWriteTimeout()
                 bleWriteCallback?.onWriteFailure(OtherException("this characteristic not support write!"))
                 return
             }
@@ -240,10 +252,12 @@ class BleConnector(bleBluetooth: BleBluetooth) {
                 handleCharacteristicWriteCallback(bleWriteCallback, uuidWrite)
                 mBluetoothGatt?.let { gatt ->
                     if (!gatt.writeCharacteristic(it)) {
+                        cancelWriteTimeout()
                         bleWriteCallback?.onWriteFailure(OtherException("gatt writeCharacteristic fail"))
                     }
                 }
             } else {
+                cancelWriteTimeout()
                 bleWriteCallback?.onWriteFailure(OtherException("Updates the locally stored value of this characteristic fail"))
             }
         }
@@ -258,10 +272,12 @@ class BleConnector(bleBluetooth: BleBluetooth) {
                 handleCharacteristicReadCallback(bleReadCallback,uuidRead)
                 mBluetoothGatt?.let { gatt ->
                     if (!gatt.readCharacteristic(it)) {
+                        cancelReadTimeout()
                         bleReadCallback?.onReadFailure(OtherException("gatt readCharacteristic fail"))
                     }
                 }
             } else {
+                cancelReadTimeout()
                 bleReadCallback?.onReadFailure(OtherException("this characteristic not support read!"))
             }
         }
@@ -271,6 +287,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         handleRssiCallback(bleRssiCallback)
         mBluetoothGatt?.let {
             if(!it.readRemoteRssi()){
+                cancelRssiTimeout()
                 bleRssiCallback?.onRssiFailure(OtherException("gatt readRemoteRssi fail"))
             }
         }
@@ -280,7 +297,8 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
             handleMtuCallback(bleMtuChangedCallback)
             mBluetoothGatt?.let {
-                if(!it.requestMtu(mtu)){
+                if (!it.requestMtu(mtu)) {
+                    cancelMtuTimeout()
                     bleMtuChangedCallback?.onSetMtuFailure(OtherException("gatt requestMtu fail"))
                 }
             }
@@ -300,7 +318,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
 
     fun handleMtuCallback(bleMtuChangedCallback: BleMtuChangedCallback?) {
         //add timeout
-        writeJob?.cancel()
+        cancelMtuTimeout()
         bleMtuChangedCallback?.let {
             mBleBluetooth.addBleMtuChangedCallback(it)
             mtuTimeout(it)
@@ -309,7 +327,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
 
     fun handleRssiCallback(bleRssiCallback: BleRssiCallback?) {
         //add timeout
-        rssiJob?.cancel()
+        cancelRssiTimeout()
         bleRssiCallback?.let {
             mBleBluetooth.addBleRssiCallback(it)
             rssiTimeout(it)
@@ -321,7 +339,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         uuidWrite: String
     ) {
         //add timeout
-        writeJob?.cancel()
+        cancelWriteTimeout()
         bleWriteCallback?.let {
             mBleBluetooth.addWriteCallback(uuidWrite,it)
             writeTimeout(it)
@@ -333,7 +351,7 @@ class BleConnector(bleBluetooth: BleBluetooth) {
         uuidRead: String
     ) {
         //add timeout
-        readJob?.cancel()
+        cancelReadTimeout()
         bleReadCallback?.let {
             mBleBluetooth.addReadCallback(uuidRead,it)
             readTimeout(it)
@@ -378,12 +396,30 @@ class BleConnector(bleBluetooth: BleBluetooth) {
             bleIndicateCallback?.onIndicateFailure(TimeOutException())
         }
     }
+    fun cancelNotifyTimeout(){
+        notifyJob?.cancel()
+    }
+    fun cancelIndicateTimeout(){
+        indicateJob?.cancel()
+    }
+    fun cancelWriteTimeout(){
+        writeJob?.cancel()
+    }
+    fun cancelReadTimeout(){
+        readJob?.cancel()
+    }
+    fun cancelMtuTimeout(){
+        mtuJob?.cancel()
+    }
+    fun cancelRssiTimeout(){
+        rssiJob?.cancel()
+    }
 
     private fun handleIndicateCallback(
         bleIndicateCallback: BleIndicateCallback?,
         uuidIndicate: String
     ) {
-        indicateJob?.cancel()
+        cancelIndicateTimeout()
         bleIndicateCallback?.let {
             mBleBluetooth.addIndicateCallback(uuidIndicate, it)
             //add timeout

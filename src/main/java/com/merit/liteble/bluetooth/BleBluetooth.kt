@@ -2,23 +2,18 @@ package com.merit.liteble.bluetooth
 
 import android.bluetooth.*
 import android.os.Build
-import android.text.TextUtils
 import com.merit.liteble.BleManager
 import com.merit.liteble.bean.BleContext
 import com.merit.liteble.bean.BleDevice
 import com.merit.liteble.callback.*
-import com.merit.liteble.exception.BleException
 import com.merit.liteble.exception.GattException
 import com.merit.liteble.exception.OtherException
 import com.merit.liteble.exception.TimeOutException
 import com.merit.liteble.utils.BleLog
 import kotlinx.coroutines.*
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedDeque
-import java.util.concurrent.TimeoutException
 
 /**
- * @Description
+ * @Description 蓝牙操作类
  * @Author lk
  * @Date 2022/10/9 14:11
  */
@@ -38,12 +33,15 @@ class BleBluetooth(bleDevice: BleDevice?) {
     private var bluetoothGatt: BluetoothGatt? = null
     private var connectRetryCount: Int = 0
     private var job: Job? = null
-    private var connectStateMap = ConcurrentHashMap<String, Any>()
-
+    private var bleConnector: BleConnector? = null
 
     fun createBleConnector(): BleConnector {
-        return BleConnector(this)
+        if(bleConnector == null){
+            bleConnector = BleConnector(this)
+        }
+        return bleConnector!!
     }
+
     @Synchronized
     fun addBleGattCallback(bleGattCallback: BleGattCallback?) {
         this.bleGattCallback = bleGattCallback
@@ -76,6 +74,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
 
     @Synchronized
     fun addNotifyCallback(uuid: String, bleNotifyCallback: BleNotifyCallback) {
+        BleLog.d("addNotifyCallback $uuid")
         bleNotifyCallbackHashMap[uuid] = bleNotifyCallback
     }
 
@@ -124,6 +123,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
 
     @Synchronized
     fun clearCharacterCallback() {
+        BleLog.d("clearCharacterCallback")
         bleNotifyCallbackHashMap.clear()
         bleIndicateCallbackHashMap.clear()
         bleReadCallbackHashMap.clear()
@@ -133,8 +133,8 @@ class BleBluetooth(bleDevice: BleDevice?) {
     /**
      * 获取设备key值
      */
-    fun getDeviceKey(): String{
-        return bleDevice?.getKey()?:""
+    fun getDeviceKey(): String {
+        return bleDevice?.getKey() ?: ""
     }
 
     fun getBleDevice(): BleDevice? {
@@ -268,6 +268,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
         closeBluetoothGatt()
         lastState = LastState.CONNECT_FAILURE
         bleDevice?.let {
+            BleManager.instance.getMultiBluetoothManager()?.removeConnectingBle(this@BleBluetooth)
             bleGattCallback?.onConnectFail(
                 it,
                 OtherException("GATT discover services exception occurred!")
@@ -283,6 +284,9 @@ class BleBluetooth(bleDevice: BleDevice?) {
         bleDevice?.let { device ->
             bluetoothGatt?.let {
                 job?.cancel()
+                BleManager.instance.getMultiBluetoothManager()
+                    ?.removeConnectingBle(this@BleBluetooth)
+                BleManager.instance.getMultiBluetoothManager()?.addBleBluetooth(this@BleBluetooth)
                 bleGattCallback?.onConnectSuccess(device, it, BluetoothGatt.GATT_SUCCESS)
             }
         }
@@ -297,7 +301,6 @@ class BleBluetooth(bleDevice: BleDevice?) {
 
         if (connectRetryCount < BleManager.instance.getConnectRetryCount()) {
             ++connectRetryCount
-
             stateReconnect()
         } else {
             stateDiscoverFailed()
@@ -311,6 +314,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
         closeBluetoothGatt()
         lastState = LastState.CONNECT_FAILURE
         bleDevice?.let {
+            BleManager.instance.getMultiBluetoothManager()?.removeConnectingBle(this@BleBluetooth)
             bleGattCallback?.onConnectFail(it, TimeOutException())
         }
     }
@@ -324,6 +328,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
         removeBleMtuChangedCallback()
         removeBleRssiCallback()
         clearCharacterCallback()
+        BleManager.instance.getMultiBluetoothManager()?.removeConnectingBle(this@BleBluetooth)
         bleDevice?.let { device ->
             bluetoothGatt?.let {
                 bleGattCallback?.onDisConnected(
@@ -372,10 +377,12 @@ class BleBluetooth(bleDevice: BleDevice?) {
                 status: Int
             ) {
                 super.onDescriptorWrite(gatt, descriptor, status)
+                BleLog.d("descriptor write notify $descriptor ${bleNotifyCallbackHashMap.size}")
                 bleNotifyCallbackHashMap.forEach { map ->
                     descriptor?.let {
-                        if (map.key.equals(it.uuid.toString(), true)) {
+                        if (map.key.equals(it.characteristic.uuid.toString(), true)) {
                             if (status == BluetoothGatt.GATT_SUCCESS) {
+                                bleConnector?.cancelNotifyTimeout()
                                 map.value.onNotifySuccess()
                             } else {
                                 map.value.onNotifyFailure(GattException(status))
@@ -385,8 +392,9 @@ class BleBluetooth(bleDevice: BleDevice?) {
                 }
                 bleIndicateCallbackHashMap.forEach { map ->
                     descriptor?.let {
-                        if (map.key.equals(it.uuid.toString(), true)) {
+                        if (map.key.equals(it.characteristic.uuid.toString(), true)) {
                             if (status == BluetoothGatt.GATT_SUCCESS) {
+                                bleConnector?.cancelIndicateTimeout()
                                 map.value.onIndicateSuccess()
                             } else {
                                 map.value.onIndicateFailure(GattException(status))
@@ -406,6 +414,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
                     characteristic?.let {
                         if (map.key.equals(it.uuid.toString(), true)) {
                             if (status == BluetoothGatt.GATT_SUCCESS) {
+                                bleConnector?.cancelReadTimeout()
                                 map.value.onReadSuccess(it.value)
                             } else {
                                 map.value.onReadFailure(GattException(status))
@@ -425,6 +434,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
                     characteristic?.let {
                         if (map.key.equals(it.uuid.toString(), true)) {
                             if (status == BluetoothGatt.GATT_SUCCESS) {
+                                bleConnector?.cancelWriteTimeout()
                                 map.value.onWriteSuccess(1, 1, it.value)
                             } else {
                                 map.value.onWriteFailure(GattException(status))
@@ -459,6 +469,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
                 super.onReadRemoteRssi(gatt, rssi, status)
                 bleRssiCallback?.let {
                     if (status == BluetoothGatt.GATT_SUCCESS) {
+                        bleConnector?.cancelRssiTimeout()
                         it.onRssiSuccess(rssi)
                     } else {
                         it.onRssiFailure(GattException(status))
@@ -470,6 +481,7 @@ class BleBluetooth(bleDevice: BleDevice?) {
                 super.onMtuChanged(gatt, mtu, status)
                 bleMtuChangedCallback?.let {
                     if (status == BluetoothGatt.GATT_SUCCESS) {
+                        bleConnector?.cancelMtuTimeout()
                         it.onMtuChanged(mtu)
                     } else {
                         it.onSetMtuFailure(GattException(status))

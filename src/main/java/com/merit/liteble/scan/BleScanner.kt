@@ -1,6 +1,7 @@
 package com.merit.liteble.scan
 
 import com.merit.liteble.BleManager
+import com.merit.liteble.bean.BleConstants
 import com.merit.liteble.bean.BleDevice
 import com.merit.liteble.bean.BleScanBean
 import com.merit.liteble.callback.BleScanAndConnectCallback
@@ -18,6 +19,7 @@ class BleScanner private constructor() {
 
     private var mScannerState = BleScanState.SCAN_STATE_IDLE
     private var job: Job? = null
+
     companion object {
         val instance by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
             BleScanner()
@@ -26,10 +28,21 @@ class BleScanner private constructor() {
 
     private val mBleScanManager = object : BleScanManager() {
         override fun onLeScan(bleDevice: BleDevice) {
-            if (isNeedConnect()) {
-                if(getBleScanImp() is BleScanAndConnectCallback){
+            if (isNeedConnect() == BleConstants.SCAN_AND_CONNECT_QUICK) {
+                if (getBleScanImp() is BleScanAndConnectCallback) {
+                    val callback = (getBleScanImp() as BleScanAndConnectCallback)
+                    job?.cancel()
+                    stopBleScan()
+                    callback.onBleScan(bleDevice)
+                    //connect device by delay 100ms
+                    connectDelay(bleDevice, callback)
+                } else {
+                    (getBleScanImp() as BleScanCallback).onBleScan(bleDevice)
+                }
+            } else if (isNeedConnect() == BleConstants.SCAN_AND_CONNECT_UNTIL_FINISH) {
+                if (getBleScanImp() is BleScanAndConnectCallback) {
                     (getBleScanImp() as BleScanAndConnectCallback).onBleScan(bleDevice)
-                }else{
+                } else {
                     (getBleScanImp() as BleScanCallback).onBleScan(bleDevice)
                 }
             } else {
@@ -46,8 +59,8 @@ class BleScanner private constructor() {
         }
 
         override fun onScanFinished(bleDeviceList: List<BleDevice>) {
-            BleLog.d( "onScanFinished: ")
-            if (isNeedConnect()) {
+            BleLog.d("onScanFinished: ")
+            if (isNeedConnect() == BleConstants.SCAN_AND_CONNECT_UNTIL_FINISH) {
                 if (getBleScanImp() is BleScanAndConnectCallback) {
                     val callback = (getBleScanImp() as BleScanAndConnectCallback)
                     if (bleDeviceList.isEmpty()) {
@@ -61,13 +74,27 @@ class BleScanner private constructor() {
                 } else {
                     (getBleScanImp() as BleScanCallback).onScanFinish(bleDeviceList)
                 }
+            } else if (isNeedConnect() == BleConstants.SCAN_AND_CONNECT_QUICK) {
+                if (getBleScanImp() is BleScanAndConnectCallback) {
+                    val callback = (getBleScanImp() as BleScanAndConnectCallback)
+                    if (bleDeviceList.isEmpty()) {
+                        callback.onScanFinished(BleDevice())
+                    } else {
+                        callback.onScanFinished(bleDeviceList[0])
+                    }
+                } else {
+                    (getBleScanImp() as BleScanCallback).onScanFinish(bleDeviceList)
+                }
             } else {
                 (getBleScanImp() as BleScanCallback).onScanFinish(bleDeviceList)
             }
         }
     }
 
-    private fun connectDelay(bleDevice: BleDevice, bleScanAndConnectCallback: BleScanAndConnectCallback){
+    private fun connectDelay(
+        bleDevice: BleDevice,
+        bleScanAndConnectCallback: BleScanAndConnectCallback
+    ) {
         job = GlobalScope.launch(Dispatchers.IO) {
             delay(200)
             BleManager.instance.connect(bleDevice, bleScanAndConnectCallback)
@@ -91,6 +118,9 @@ class BleScanner private constructor() {
 
     @Synchronized
     fun stopBleScan() {
+        if(mScannerState == BleScanState.SCAN_STATE_IDLE){
+            return
+        }
         BleManager.instance.getBluetoothScanAdapter()?.stopLeScan(mBleScanManager)
         mScannerState = BleScanState.SCAN_STATE_IDLE
         mBleScanManager.notifyScanStop()

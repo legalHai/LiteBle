@@ -5,7 +5,7 @@ import android.content.pm.PackageManager
 import com.merit.liteble.bean.BleContext
 
 /**
- * @Description
+ * @Description 工具类
  * @Author lk
  * @Date 2022/9/30 11:30
  */

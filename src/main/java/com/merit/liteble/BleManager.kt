@@ -5,7 +5,6 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
-import android.os.Build
 import com.merit.liteble.bean.BleConstants
 import com.merit.liteble.bean.BleContext
 import com.merit.liteble.bean.BleDevice
@@ -20,7 +19,7 @@ import com.merit.liteble.utils.BleLog
 import com.merit.liteble.utils.BleUtils
 
 /**
- * @Description
+ * @Description 蓝牙搜索连接管理总类
  * @Author lk
  * @Date 2022/9/30 11:09
  */
@@ -35,7 +34,6 @@ class BleManager private constructor() {
     private var mReConnectCount: Int? = BleConstants.RECONNECT_COUNT
     private var maxConnectCount: Int? = BleConstants.MAX_MULTIPLE_DEVICE
     private var mSplitWriteNum = BleConstants.WRITE_DATA_SPLIT_COUNT
-    private var enableLog: Boolean = false
 
     companion object {
         @JvmStatic
@@ -66,7 +64,7 @@ class BleManager private constructor() {
      * 是否开启log
      */
     fun enableLog(enableLog: Boolean): BleManager {
-        this.enableLog = enableLog
+        BleLog.needPrint = enableLog
         return this
     }
 
@@ -128,7 +126,9 @@ class BleManager private constructor() {
             bleScanAndConnectCallback.onScanStart(false)
         }
         mScanOption?.bleScanBean?.let {
-            it.mNeedConnect = true
+            if(it.mNeedConnect == BleConstants.SCAN_NOT_CONNECT){
+                it.mNeedConnect = BleConstants.SCAN_AND_CONNECT_UNTIL_FINISH
+            }
             BleScanner.instance.startBleScan(it, bleScanAndConnectCallback)
         }
     }
@@ -394,6 +394,10 @@ class BleManager private constructor() {
 
     fun getAllConnectedDevice(): List<BleBluetooth>? {
         return multiBluetoothManager?.getBleBluetoothList()
+    }
+
+    fun getMultiBluetoothManager(): MultiBluetoothManager? {
+        return multiBluetoothManager
     }
 
     fun getConnectState(bleDevice: BleDevice?): Int {

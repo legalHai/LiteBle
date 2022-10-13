@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 
 /**
- * @Description
+ * @Description 全局context
  * @Author lk
  * @Date 2022/9/30 15:10
  */
